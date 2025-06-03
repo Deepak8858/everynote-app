@@ -1,13 +1,14 @@
 // apps/expo/src/app/editor.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native'; // Added ScrollView, Pressable
+import { View, Text, Button, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import TenTapEditor, { Toolbar, useEditorBridge } from '@10play/tentap-editor';
-import { powerSyncDb, usePowerSyncWatchedQuery } from '@powersync/react-native'; // Import usePowerSyncWatchedQuery
+import { powerSyncDb, usePowerSyncWatchedQuery } from '@powersync/react-native';
 import { authClient } from '~/utils/auth';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
+import { useColorScheme } from "nativewind"; // Import useColorScheme
 
 interface Note {
   id: string;
@@ -18,7 +19,7 @@ interface Note {
   updated_at: string;
 }
 
-interface Category { // Added Category interface
+interface Category {
   id: string;
   name: string;
 }
@@ -28,22 +29,22 @@ export default function EditorScreen() {
   const params = useLocalSearchParams<{ noteId?: string }>();
   const noteIdFromParams = params.noteId;
 
+  const { colorScheme } = useColorScheme(); // Get current color scheme
   const { data: session } = authClient.useSession();
   const userId = session?.user?.id;
 
   const [content, setContent] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null); // State for selected category
-  const [isLoadingNote, setIsLoadingNote] = useState(false); // Separate loading for note
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [isLoadingNote, setIsLoadingNote] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentNote, setCurrentNote] = useState<Note | null>(null);
 
   const isNewNote = noteIdFromParams === 'new' || !noteIdFromParams;
 
-  // Fetch categories
   const { data: categories, isLoading: isLoadingCategories } = usePowerSyncWatchedQuery<Category>(
     `SELECT id, name FROM categories WHERE user_id = ? ORDER BY name ASC`,
-    [userId!], // userId must be non-null due to enabled: !!userId
+    [userId!],
     { enabled: !!userId }
   );
 
@@ -96,7 +97,6 @@ export default function EditorScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteIdFromParams, userId, isNewNote, router, session]);
-
 
   const handleSave = async () => {
     if (!userId) {
@@ -163,147 +163,91 @@ export default function EditorScreen() {
 
   const isPageLoading = isLoadingNote || (!!userId && isLoadingCategories && !categories);
 
-
   if (isPageLoading && !currentNote && !isNewNote) {
-    return <SafeAreaView style={styles.container}><View style={styles.centered}><ActivityIndicator size="large" /></View></SafeAreaView>;
+    return <SafeAreaView className="flex-1 bg-white dark:bg-black justify-center items-center"><ActivityIndicator size="large" color={Platform.OS === 'android' ? "#db2777" : undefined} /></SafeAreaView>;
   }
   if (!userId && !session?.isLoading) {
-    return <SafeAreaView style={styles.container}><View style={styles.centered}><Text>Redirecting to login...</Text></View></SafeAreaView>;
+    return <SafeAreaView className="flex-1 bg-white dark:bg-black justify-center items-center"><Text className="text-stone-700 dark:text-stone-200">Redirecting to login...</Text></SafeAreaView>;
   }
 
-  const renderCategoryPill = (category: Category | { id: null; name: 'No Category' }) => (
+  const renderCategoryPill = (category: Category | { id: null; name: 'No Category' }) => {
+    const isSelected = selectedCategoryId === category.id;
+    return (
+      <Pressable
+        key={category.id ?? 'no-category-key'}
+        className={`py-2 px-3.5 rounded-full mx-1 border
+                    ${isSelected
+                      ? 'bg-pink-600 border-pink-600 active:bg-pink-700 dark:bg-pink-500 dark:border-pink-500 dark:active:bg-pink-600'
+                      : 'bg-stone-100 border-stone-300 active:bg-stone-200 dark:bg-stone-700 dark:border-stone-600 dark:active:bg-stone-600'}`}
+        onPress={() => setSelectedCategoryId(category.id)}
+      >
+        <Text className={`text-xs font-medium ${isSelected ? 'text-white dark:text-gray-100' : 'text-stone-700 dark:text-stone-200'}`}>
+          {category.name}
+        </Text>
+      </Pressable>
+    );
+  };
+
+  // Button components for consistent styling
+  const StyledButton = ({ title, onPress, disabled, color, isDelete = false }: { title: string, onPress: () => void, disabled?: boolean, color?: string, isDelete?: boolean }) => (
     <Pressable
-      key={category.id ?? 'no-category-key'}
-      style={[
-        styles.categoryPill,
-        selectedCategoryId === category.id ? styles.categoryPillSelected : {},
-      ]}
-      onPress={() => setSelectedCategoryId(category.id)}
+      onPress={onPress}
+      disabled={disabled}
+      className={`flex-1 py-3 rounded-lg items-center mx-1 shadow-sm
+                  ${disabled ? 'bg-gray-300 dark:bg-gray-600' :
+                    isDelete ? 'bg-red-600 active:bg-red-700 dark:bg-red-500 dark:active:bg-red-600' :
+                               'bg-blue-600 active:bg-blue-700 dark:bg-blue-500 dark:active:bg-blue-600'}`}
     >
-      <Text style={[
-        styles.categoryPillText,
-        selectedCategoryId === category.id ? styles.categoryPillTextSelected : {},
-      ]}>
-        {category.name}
-      </Text>
+      <Text className={`text-base font-semibold ${disabled ? 'text-gray-500 dark:text-gray-400' : 'text-white'}`}>{title}</Text>
     </Pressable>
   );
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView className="flex-1 bg-white dark:bg-black">
       <Stack.Screen options={{ title: isNewNote ? "New Note" : "Edit Note" }} />
-      <View style={styles.content}>
-        <Text style={styles.titleText}>
+      <View className="flex-1 p-4">
+        <Text className="text-xl font-bold mb-2 text-center text-stone-900 dark:text-white">
           {isNewNote ? "Create New Note" : `Editing Note`}
         </Text>
 
-        <View style={styles.categorySelectorContainer}>
-          <Text style={styles.categoryLabel}>Category:</Text>
-          {isLoadingCategories && !categories ? <ActivityIndicator/> : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoriesScrollView}>
+        <View className="mb-3">
+          <Text className="text-base font-medium mb-1.5 text-stone-700 dark:text-stone-200">Category:</Text>
+          {isLoadingCategories && !categories ? <ActivityIndicator color={Platform.OS === 'android' ? "#db2777" : undefined} /> : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="flex-row items-center py-1">
               {renderCategoryPill({ id: null, name: 'No Category' })}
               {categories?.map(cat => renderCategoryPill(cat))}
             </ScrollView>
           )}
         </View>
 
-        <View style={styles.editorContainer}>
+        <View className="flex-1 border border-stone-300 dark:border-stone-600 rounded-lg mb-4 overflow-hidden bg-white dark:bg-stone-800">
           {editor ? (
-            <TenTapEditor editor={editor} />
-          ) : <View style={styles.centered}><ActivityIndicator /></View> }
+            <TenTapEditor
+              editor={editor}
+              theme={colorScheme === "dark" ? "dark" : "light"} // Pass theme prop
+            />
+          ) : <View className="flex-1 justify-center items-center"><ActivityIndicator size="large" color={Platform.OS === 'android' ? "#db2777" : undefined} /></View> }
         </View>
 
-        <View style={styles.buttonContainer}>
-          <Button title={isSaving ? "Saving..." : "Save Note"} onPress={handleSave} disabled={isSaving || isDeleting || !editor} />
+        <View className="flex-row justify-around mb-2">
+          <StyledButton title={isSaving ? "Saving..." : "Save Note"} onPress={handleSave} disabled={isSaving || isDeleting || !editor} />
           {!isNewNote && currentNote && (
-            <Button title={isDeleting ? "Deleting..." : "Delete Note"} color="red" onPress={handleDelete} disabled={isSaving || isDeleting || !editor} />
+             <StyledButton title={isDeleting ? "Deleting..." : "Delete Note"} onPress={handleDelete} disabled={isSaving || isDeleting || !editor} isDelete={true} />
           )}
         </View>
-        <Button title="Back to Home" onPress={() => router.back()} disabled={isSaving || isDeleting} />
+         <StyledButton title="Back to Home" onPress={() => router.back()} disabled={isSaving || isDeleting} color="#6c757d" />
       </View>
       {editor && (
         <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.keyboardAvoidingView}
+            // The toolbar itself should handle its dark theme via its `theme` prop.
+            // The KAV might need a background if the toolbar doesn't fully cover it or for overscroll.
+            className="absolute w-full bottom-0 bg-transparent dark:bg-transparent"
         >
-            <Toolbar editor={editor} />
+            <Toolbar editor={editor} theme={colorScheme === "dark" ? "dark" : "light"} />
         </KeyboardAvoidingView>
       )}
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centered: { // Centering style for loaders
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  titleText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  categorySelectorContainer: {
-    marginBottom: 10,
-    minHeight: 50, // Ensure space for loader or categories
-  },
-  categoryLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
-    color: '#333',
-  },
-  categoriesScrollView: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: 5,
-  },
-  categoryPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 15,
-    backgroundColor: '#e0e0e0',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#d0d0d0',
-  },
-  categoryPillSelected: {
-    backgroundColor: '#f472b6',
-    borderColor: '#f472b6',
-  },
-  categoryPillText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  categoryPillTextSelected: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  editorContainer: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    marginBottom: 15,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 10,
-  },
-  keyboardAvoidingView: {
-    position: 'absolute',
-    width: '100%',
-    bottom: 0,
-  }
-});
